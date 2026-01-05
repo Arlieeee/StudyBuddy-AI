@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from .rag_service import get_rag_service
 from .gemini_client import get_gemini_client
+from .keyword_extractor import get_keyword_extractor
 
 
 class VisualizationTopic(BaseModel):
@@ -37,6 +38,7 @@ class RecommendationService:
         """
         rag = get_rag_service()
         gemini = get_gemini_client()
+        keyword_extractor = get_keyword_extractor()
         
         # Get document summaries
         documents = rag.list_documents()
@@ -56,6 +58,8 @@ class RecommendationService:
         
         # Get sample content from documents for analysis
         doc_samples = []
+        all_content_for_keywords = []  # Collect content for TF-IDF analysis
+        
         for doc in documents[:3]:  # Limit to 3 documents
             results = await rag.search(
                 query="主要内容概述",
@@ -63,10 +67,24 @@ class RecommendationService:
                 document_ids=[doc["id"]]
             )
             if results:
+                content = "\n".join([r["text"][:500] for r in results])
                 doc_samples.append({
                     "filename": doc["filename"],
-                    "content": "\n".join([r["text"][:500] for r in results])
+                    "content": content
                 })
+                all_content_for_keywords.append(content)
+        
+        # === NEW: TF-IDF Keyword Extraction ===
+        extracted_keywords = []
+        if all_content_for_keywords:
+            try:
+                extracted_keywords = keyword_extractor.get_trending_topics(
+                    all_content_for_keywords, 
+                    top_n=15
+                )
+                print(f"[Recommendation] Extracted TF-IDF keywords: {extracted_keywords}")
+            except Exception as e:
+                print(f"[Recommendation] Keyword extraction failed: {e}")
         
         # Analyze conversation for frequently mentioned concepts
         frequent_concepts = ""
@@ -80,18 +98,22 @@ class RecommendationService:
                 frequent_concepts = "\n".join(user_messages)
         
         # Build prompt for Gemini to generate recommendations
+        keywords_section = ""
+        if extracted_keywords:
+            keywords_section = f"\n## 🔑 TF-IDF 提取的高频关键词\n{', '.join(extracted_keywords[:15])}\n"
+        
         prompt = f"""基于以下学习资料和用户对话历史，生成5个适合制作可视化图解的主题推荐。
 
 ## 学习资料内容摘要
 {chr(10).join([f"### {s['filename']}{chr(10)}{s['content']}" for s in doc_samples]) if doc_samples else "暂无资料摘要"}
-
+{keywords_section}
 ## 用户近期提问/关注概念
 {frequent_concepts if frequent_concepts else "暂无对话历史"}
 
 ## 要求
-请生成5个可视化主题推荐，每个主题包含：
+请基于上述**关键词**和资料内容，生成5个可视化主题推荐，每个主题包含：
 1. type: 类型，只能是 "overview"(全局概览)、"concept"(具体概念)、"chapter"(章节总结) 之一
-2. title: 简短标题（10字以内）
+2. title: 简短标题（10字以内），必须包含关键词中的核心概念
 3. description: 描述（20字以内）
 4. prompt: 用于生成图解的完整提示词
 
