@@ -60,6 +60,24 @@ const Icons = {
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   ),
+  Sun: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1" x2="12" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1" y1="12" x2="3" y2="12" />
+      <line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </svg>
+  ),
+  Moon: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  ),
   Sparkles: () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -406,8 +424,29 @@ function App() {
   const [showRecommendations, setShowRecommendations] = useState(false)
   const [recommendations, setRecommendations] = useState([])
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false)
+  // 新增：主题模式 ('light', 'dark', 'auto')
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('studybuddy_theme') || 'auto'
+  })
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+
+  // Theme toggle handler
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'auto' : 'light'
+    setTheme(newTheme)
+    localStorage.setItem('studybuddy_theme', newTheme)
+  }
+
+  // Apply theme to document
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'auto') {
+      root.removeAttribute('data-theme')
+    } else {
+      root.setAttribute('data-theme', theme)
+    }
+  }, [theme])
 
   // Load documents and display names on mount
   useEffect(() => {
@@ -415,7 +454,11 @@ function App() {
     // Load display names from localStorage
     const savedNames = localStorage.getItem('studybuddy_display_names')
     if (savedNames) {
-      setDisplayNames(JSON.parse(savedNames))
+      try {
+        setDisplayNames(JSON.parse(savedNames))
+      } catch (e) {
+        console.error('Failed to parse saved display names:', e)
+      }
     }
   }, [])
 
@@ -424,9 +467,12 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Save display names to localStorage when changed
+  // Save display names to localStorage when changed (skip initial empty state)
   useEffect(() => {
-    localStorage.setItem('studybuddy_display_names', JSON.stringify(displayNames))
+    // Only save if displayNames has been populated (not initial empty object)
+    if (Object.keys(displayNames).length > 0) {
+      localStorage.setItem('studybuddy_display_names', JSON.stringify(displayNames))
+    }
   }, [displayNames])
 
   // Auto-resize textarea based on content
@@ -762,7 +808,16 @@ function App() {
           <div className="chat-container">
             <div className="chat-header">
               <h2 className="chat-title">💬 智能学习助手</h2>
-              <span className="badge">{inputMode === 'chat' ? '对话模式' : '图解模式'}</span>
+              <div className="chat-header-actions">
+                <span className="badge">{inputMode === 'chat' ? '对话模式' : '图解模式'}</span>
+                <button
+                  className="theme-toggle-btn"
+                  onClick={toggleTheme}
+                  title={theme === 'light' ? '浅色模式' : theme === 'dark' ? '深色模式' : '跟随系统'}
+                >
+                  {theme === 'dark' ? <Icons.Moon /> : theme === 'light' ? <Icons.Sun /> : '🌓'}
+                </button>
+              </div>
             </div>
 
             {/* 对话消息区域 */}
